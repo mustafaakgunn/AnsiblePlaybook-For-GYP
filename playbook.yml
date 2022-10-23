@@ -1,0 +1,69 @@
+---
+- name: Playbook for GYP
+  hosts: remote
+  become: yes
+  become_user: root
+  vars:
+    who: Mustafa Akgun
+    hostname: "{{ ansible_facts['hostname'] }}"
+    host_ip: "{{ ansible_facts['default_ipv4']['address'] }}"
+
+  tasks:
+
+    - name: Installing latest packages...
+      yum:
+        name: '*'
+        state: latest
+        update_cache: yes
+        update_only: yes
+      register: yum_update_status
+
+    - name: Disabling SELinux...
+      ansible.posix.selinux:
+        state: disabled
+
+    - name: Installing apache packages...
+      yum:
+        name: httpd
+        state: present
+
+    - name: Start httpd
+      service:
+        name: httpd
+        state: started
+
+    - name: Open port 80 for access
+      firewalld:
+        service: http
+        permanent: true
+        state: enabled
+
+    - name: Restart firewalld service to load firewall changes
+      service:
+        name: firewalld
+        state: reloaded
+
+    - name: Apply Page Template
+      template:
+        src: templates/index.html.j2
+        dest: /var/www/html/index.html
+
+    - name: Setup tree if 5GB space is available
+      yum:
+        name: tree
+        state: latest
+      when: (ansible_mounts|selectattr("mount", "equalto", "/")|list)[0].size_available > 5*1024*1024*1024
+
+
+- name: Hosts file in local...
+  hosts: all
+  become: yes
+  gather_facts: yes
+  tasks:
+    - name: Get hostnames and write
+      template:
+        src: templates/hosts.j2
+        dest: /etc/hosts
+        mode: 0775
+
+
